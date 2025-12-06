@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<title>Rezzover TierList</title>
+<script>
+// SECURITY FLAG
+let adminLogged = false;
+
+function openAdmin() {
+  document.getElementById("admin-panel").style.display = "block";
+}
+
+function loginAdmin() {
+  const pass = document.getElementById("admin-pass").value;
+  if (pass === "taroleroxd32") {
+    adminLogged = true;
+    document.getElementById("admin-pass").disabled = true;
+    alert("Acceso permitido");
+  } else {
+    alert("Contraseña incorrecta");
+  }
+}
+
+async function savePlayerOnline(player) {
+  if (!adminLogged) return alert("Necesitas la contraseña para editar.");
+  await fetch("/.netlify/functions/savePlayers", {
+    method: "POST",
+    body: JSON.stringify(player)
+  });
+  alert("Guardado ONLINE");
+}
+
+async function deletePlayerOnline(name) {
+  if (!adminLogged) return alert("Necesitas la contraseña para eliminar.");
+  await fetch("/.netlify/functions/savePlayers", {
+    method: "DELETE",
+    body: JSON.stringify({ name })
+  });
+  alert("Jugador eliminado ONLINE");
+}
+</script>
+</head>
+<body>
+<h1>Rezzover TierList</h1>
+
+<button onclick="openAdmin()">Admin</button>
+
+<div id="admin-panel" style="display:none;background:#222;padding:20px">
+  <input type="password" id="admin-pass" placeholder="Contraseña">
+  <button onclick="loginAdmin()">Entrar</button>
+  <br><br>
+  <button onclick="savePlayerOnline({name:'Ejemplo', modes:[]})">Guardar Jugador</button>
+  <button onclick="deletePlayerOnline('Ejemplo')">Eliminar Jugador</button>
+</div>
+
+</body>
+</html>
