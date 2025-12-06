@@ -34,7 +34,10 @@
  .mode-row select{width:110px}
  .admin-btn{padding:10px;background:#6a4bd9;border:none;color:#fff;border-radius:10px;width:100%;cursor:pointer;font-weight:bold;margin-top:10px}
  .delete-btn{background:#d95353}
+ /* Ocultar elementos de admin hasta login */
+ .admin-hidden{display:none;}
 </style>
+
 <!-- Firebase -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
@@ -59,19 +62,19 @@
 <button id="admin-open" onclick="openAdmin()">Admin</button>
 
 <!-- Admin Panel -->
-<div id="admin-panel">
+<div id="admin-panel" class="admin-hidden">
  <input id="admin-pass" type="password" placeholder="Contraseña" />
  <button class="admin-btn" onclick="loginAdmin()">Entrar</button>
  <hr style="opacity:.3;margin:10px 0">
- <input id="searchPlayer" placeholder="Buscar jugador..." oninput="loadPlayerForEdit()" />
- <input id="playerName" placeholder="Nombre del jugador" />
- <div id="modeSelects"></div>
- <button class="admin-btn" onclick="savePlayer()">Guardar jugador</button>
- <button class="admin-btn delete-btn" onclick="deletePlayer()">Eliminar jugador</button>
+ <input id="searchPlayer" placeholder="Buscar jugador..." oninput="loadPlayerForEdit()" class="admin-hidden"/>
+ <input id="playerName" placeholder="Nombre del jugador" class="admin-hidden"/>
+ <div id="modeSelects" class="admin-hidden"></div>
+ <button class="admin-btn admin-hidden" onclick="savePlayer()">Guardar jugador</button>
+ <button class="admin-btn delete-btn admin-hidden" onclick="deletePlayer()">Eliminar jugador</button>
 </div>
 
 <script>
-// 🔹 Firebase config (usa tu propia configuración de Firebase)
+// 🔹 Firebase config (pon tus datos reales)
 const firebaseConfig = {
   apiKey: "TU_API_KEY",
   authDomain: "TU_PROJECT.firebaseapp.com",
@@ -87,7 +90,7 @@ const db = firebase.firestore();
 let categories=["overall","vanilla","sword","nethpot","uhc","axe","smp"];
 let modesList=["vanilla","sword","nethpot","uhc","axe","smp"];
 let tierPoints={HT1:10,LT1:9,HT2:8,LT2:7,HT3:6,LT3:5,HT4:4,LT4:3,HT5:2,LT5:1};
-let players=[]; // se cargará desde Firebase
+let players=[];
 let currentCategory="overall";
 let editingPlayer=null;
 let adminLoggedIn = false;
@@ -149,12 +152,17 @@ function openModal(name){
 function closeModal(){document.getElementById("modal").style.display="none";}
 
 // 🔹 Admin
-function openAdmin(){document.getElementById("admin-panel").style.display="block";}
+function openAdmin(){
+ if(!adminLoggedIn){
+   document.getElementById("admin-panel").classList.remove("admin-hidden");
+ }
+}
 function loginAdmin(){
  let pass=document.getElementById("admin-pass").value;
  if(pass!="taroleroxd32") return alert("Contraseña incorrecta");
  adminLoggedIn = true;
- document.getElementById("admin-pass").style.display="none";
+ // Mostrar inputs y botones
+ document.querySelectorAll(".admin-hidden").forEach(el=>el.style.display="block");
  renderModeSelectors();
  alert("Acceso concedido");
 }
@@ -209,11 +217,8 @@ async function savePlayer(){
  });
 
  if(editingPlayer){
-   // actualizar en Firebase
-   const docRef = db.collection("players").doc(editingPlayer.id);
-   await docRef.set({name:name,modes:newModes});
+   await db.collection("players").doc(editingPlayer.id).set({name:name,modes:newModes});
  } else {
-   // agregar nuevo en Firebase
    await db.collection("players").add({name:name,modes:newModes});
  }
  editingPlayer=null;
@@ -232,13 +237,14 @@ async function deletePlayer(){
 
 // 🔹 Cargar jugadores desde Firebase en tiempo real
 db.collection("players").onSnapshot(snapshot=>{
- players=[];
- snapshot.forEach(doc=>{
-   let data = doc.data();
-   data.id = doc.id; // guardar id para editar/borrar
-   players.push(data);
- });
- renderPlayers();
+    let tempPlayers = [];
+    snapshot.forEach(doc=>{
+        let data = doc.data();
+        data.id = doc.id; // mantener id único
+        tempPlayers.push(data);
+    });
+    players = tempPlayers; // reemplaza lista completa
+    renderPlayers();
 });
 
 // Inicial
