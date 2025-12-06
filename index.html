@@ -1,58 +1,226 @@
 <!DOCTYPE html>
 <html lang="es">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 <title>Rezzover TierList</title>
-<script>
-// SECURITY FLAG
-let adminLogged = false;
-
-function openAdmin() {
-  document.getElementById("admin-panel").style.display = "block";
-}
-
-function loginAdmin() {
-  const pass = document.getElementById("admin-pass").value;
-  if (pass === "taroleroxd32") {
-    adminLogged = true;
-    document.getElementById("admin-pass").disabled = true;
-    alert("Acceso permitido");
-  } else {
-    alert("Contraseña incorrecta");
-  }
-}
-
-async function savePlayerOnline(player) {
-  if (!adminLogged) return alert("Necesitas la contraseña para editar.");
-  await fetch("/.netlify/functions/savePlayers", {
-    method: "POST",
-    body: JSON.stringify(player)
-  });
-  alert("Guardado ONLINE");
-}
-
-async function deletePlayerOnline(name) {
-  if (!adminLogged) return alert("Necesitas la contraseña para eliminar.");
-  await fetch("/.netlify/functions/savePlayers", {
-    method: "DELETE",
-    body: JSON.stringify({ name })
-  });
-  alert("Jugador eliminado ONLINE");
-}
-</script>
+<style>
+ body{margin:0;background:#1a1333;color:#fff;font-family:Arial}
+ h1{text-align:center;margin:20px 0;font-size:32px}
+ .category-btns{display:flex;gap:10px;justify-content:center;margin-bottom:20px;flex-wrap:wrap}
+ .category-btns button{padding:10px 18px;background:#3a2a66;border:none;color:#fff;border-radius:8px;cursor:pointer;font-weight:bold}
+ .category-btns button.active{background:#6a4bd9}
+ .player-card{background:#251a47;padding:12px;border-radius:12px;display:flex;align-items:center;margin:10px 0;cursor:pointer;transition:.2s}
+ .player-card:hover{background:#2f1f5d}
+ .player-card img{width:70px;border-radius:10px;margin-right:15px}
+ .tier-tag{opacity:.8;font-size:14px}
+ #players{width:90%;margin:auto;max-width:900px}
+ /* Modal */
+ #modal{position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,.6);display:none;justify-content:center;align-items:center}
+ #modal-box{background:#251a47;padding:20px;border-radius:15px;width:330px;text-align:center;animation:pop .2s}
+ @keyframes pop{from{transform:scale(.8);opacity:0}to{transform:scale(1);opacity:1}}
+ #modal-box img{width:140px;border-radius:12px}
+ .stat{background:#2f1f5d;padding:8px;border-radius:10px;margin-top:10px}
+ /* Tiers colors */
+ .tier-HT1{color:#ffd700}.tier-LT1{color:#f2c94c}.tier-HT2{color:#c0c0c0}.tier-LT2{color:#a8a8a8}
+ .tier-HT3{color:#6fc3ff}.tier-LT3{color:#4fa4e0}.tier-HT4{color:#b89cff}.tier-LT4{color:#9477f5}
+ .tier-HT5{color:#ff7f7f}.tier-LT5{color:#d95353}
+ /* Admin button */
+ #admin-open{position:fixed;bottom:20px;right:20px;background:#6a4bd9;border:none;color:#fff;padding:14px 20px;border-radius:50px;font-weight:bold;cursor:pointer;z-index:50}
+ /* Admin Panel */
+ #admin-panel{position:fixed;bottom:80px;right:20px;background:#251a47;padding:20px;border-radius:15px;width:300px;display:none;z-index:60}
+ #admin-panel input,#admin-panel select{width:100%;padding:8px;border-radius:8px;border:none;margin-bottom:10px;background:#1a1333;color:#fff}
+ .mode-row{display:flex;align-items:center;justify-content:space-between;margin:6px 0}
+ .mode-row select{width:110px}
+ .admin-btn{padding:10px;background:#6a4bd9;border:none;color:#fff;border-radius:10px;width:100%;cursor:pointer;font-weight:bold;margin-top:10px}
+ .delete-btn{background:#d95353}
+</style>
 </head>
 <body>
 <h1>Rezzover TierList</h1>
+<div class="category-btns" id="catBtns"></div>
+<div id="players"></div>
 
-<button onclick="openAdmin()">Admin</button>
-
-<div id="admin-panel" style="display:none;background:#222;padding:20px">
-  <input type="password" id="admin-pass" placeholder="Contraseña">
-  <button onclick="loginAdmin()">Entrar</button>
-  <br><br>
-  <button onclick="savePlayerOnline({name:'Ejemplo', modes:[]})">Guardar Jugador</button>
-  <button onclick="deletePlayerOnline('Ejemplo')">Eliminar Jugador</button>
+<!-- Modal -->
+<div id="modal" onclick="closeModal()">
+ <div id="modal-box" onclick="event.stopPropagation()">
+   <img id="m-img" />
+   <h2 id="m-name"></h2>
+   <div class="stat" id="m-overall"></div>
+   <div id="m-modes"></div>
+   <button class="admin-btn" onclick="closeModal()">Cerrar</button>
+ </div>
 </div>
 
+<!-- Admin Button -->
+<button id="admin-open" onclick="openAdmin()">Admin</button>
+
+<!-- Admin Panel -->
+<div id="admin-panel">
+ <input id="admin-pass" type="password" placeholder="Contraseña" />
+ <button class="admin-btn" onclick="loginAdmin()">Entrar</button>
+ <hr style="opacity:.3;margin:10px 0">
+ <input id="searchPlayer" placeholder="Buscar jugador..." oninput="loadPlayerForEdit()" />
+ <input id="playerName" placeholder="Nombre del jugador" />
+ <div id="modeSelects"></div>
+ <button class="admin-btn" onclick="savePlayer()">Guardar jugador</button>
+ <button class="admin-btn delete-btn" onclick="deletePlayer()">Eliminar jugador</button>
+</div>
+
+<script>
+let categories=["overall","vanilla","sword","nethpot","uhc","axe","smp"];
+let modesList=["vanilla","sword","nethpot","uhc","axe","smp"];
+let tierPoints={HT1:10,LT1:9,HT2:8,LT2:7,HT3:6,LT3:5,HT4:4,LT4:3,HT5:2,LT5:1};
+let players=JSON.parse(localStorage.getItem("players"))||[];
+let currentCategory="overall";
+let editingPlayer=null;
+let adminLoggedIn = false; // ← variable para proteger admin
+
+function save(){localStorage.setItem("players",JSON.stringify(players));}
+
+function renderCategories(){
+ let html="";
+ categories.forEach(c=>{
+   html+=`<button class='${c===currentCategory?"active":""}' onclick="setCategory('${c}')">${c.toUpperCase()}</button>`;
+ });
+ document.getElementById("catBtns").innerHTML=html;
+}
+
+function setCategory(c){currentCategory=c;renderCategories();renderPlayers();}
+
+function calculateOverall(p){
+ let sum=0;
+ p.modes.forEach(m=>{sum+=tierPoints[m.level]});
+ return sum;
+}
+
+function renderPlayers(){
+ let list=[];
+ if(currentCategory=="overall"){
+   list=[...players].sort((a,b)=>calculateOverall(b)-calculateOverall(a));
+ } else {
+   list=players.filter(p=>p.modes.some(m=>m.category===currentCategory));
+   // ordenar por la categoría actual
+   list.sort((a,b)=>{
+       let aLvl = a.modes.find(m=>m.category===currentCategory)?.level;
+       let bLvl = b.modes.find(m=>m.category===currentCategory)?.level;
+       return (tierPoints[bLvl]||0) - (tierPoints[aLvl]||0);
+   });
+ }
+ let html="";
+ list.forEach(p=>{
+   let ov=calculateOverall(p);
+   html+=`
+    <div class='player-card' onclick="openModal('${p.name}')">
+     <img src="https://render.crafty.gg/3d/bust/${p.name}">
+     <div>
+       <div style='font-size:20px;font-weight:bold'>${p.name}</div>
+       <div class='tier-tag'>Overall: ${ov} pts</div>
+     </div>
+    </div>`;
+ });
+ document.getElementById("players").innerHTML=html;
+}
+
+function openModal(name){
+ let p=players.find(x=>x.name===name);
+ document.getElementById("modal").style.display="flex";
+ document.getElementById("m-img").src=`https://render.crafty.gg/3d/bust/${p.name}`;
+ document.getElementById("m-name").innerHTML=p.name;
+ document.getElementById("m-overall").innerHTML=`Overall: ${calculateOverall(p)} pts`;
+ let mhtml="";
+ p.modes.forEach(m=>{
+   mhtml+=`<div class='stat tier-${m.level}'>${m.category.toUpperCase()}: ${m.level}</div>`;
+ });
+ document.getElementById("m-modes").innerHTML=mhtml;
+}
+function closeModal(){document.getElementById("modal").style.display="none";}
+
+// Admin
+function openAdmin(){
+ document.getElementById("admin-panel").style.display="block";
+}
+
+function loginAdmin(){
+ let pass=document.getElementById("admin-pass").value;
+ if(pass!="taroleroxd32") return alert("Contraseña incorrecta");
+ adminLoggedIn = true; // ← marca que el admin está logueado
+ document.getElementById("admin-pass").style.display="none";
+ renderModeSelectors();
+ alert("Acceso concedido");
+}
+
+function renderModeSelectors(player=null){
+ let html="";
+ modesList.forEach(m=>{
+   let level="";
+   let checked="";
+   if(player){
+     let found=player.modes.find(x=>x.category===m);
+     if(found){checked="checked";level=found.level;}
+   }
+   html+=`
+    <div class='mode-row'>
+      <label>${m.toUpperCase()}</label>
+      <input type='checkbox' id='cb-${m}' ${checked} onchange='toggleTier("${m}")'>
+      <select id='tier-${m}' style='display:${checked?"block":"none"}'>
+        <option value=''>-</option>
+        ${Object.keys(tierPoints).map(t=>`<option ${level==t?"selected":""}>${t}</option>`).join("")}
+      </select>
+    </div>`;
+ });
+ document.getElementById("modeSelects").innerHTML=html;
+}
+
+function toggleTier(m){
+ let cb=document.getElementById("cb-"+m);
+ let sl=document.getElementById("tier-"+m);
+ if(!cb || !sl) return;
+ sl.style.display=cb.checked?"block":"none";
+}
+
+function loadPlayerForEdit(){
+ let name=document.getElementById("searchPlayer").value.trim();
+ let p=players.find(x=>x.name.toLowerCase()==name.toLowerCase());
+ if(!p) return;
+ editingPlayer=p;
+ document.getElementById("playerName").value=p.name;
+ renderModeSelectors(p);
+}
+
+function savePlayer(){
+ if(!adminLoggedIn) return alert("Debes iniciar sesión como admin para guardar jugadores");
+
+ let name=document.getElementById("playerName").value.trim();
+ if(!name) return alert("Pon un nombre");
+
+ let newModes=[];
+ modesList.forEach(m=>{
+   let cb=document.getElementById("cb-"+m).checked;
+   let lv=document.getElementById("tier-"+m).value;
+   if(cb && lv) newModes.push({category:m,level:lv});
+ });
+
+ if(editingPlayer){
+   editingPlayer.name=name;
+   editingPlayer.modes=newModes;
+ } else {
+   players.push({name:name,modes:newModes});
+ }
+
+ editingPlayer=null;
+ save();renderPlayers();alert("Guardado");
+}
+
+function deletePlayer(){
+ if(!adminLoggedIn) return alert("Debes iniciar sesión como admin para eliminar jugadores");
+ if(!editingPlayer) return alert("Busca un jugador primero");
+ players=players.filter(p=>p!==editingPlayer);
+ editingPlayer=null;
+ save();renderPlayers();alert("Eliminado");
+}
+
+renderCategories();renderPlayers();
+</script>
 </body>
 </html>
