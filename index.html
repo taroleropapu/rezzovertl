@@ -35,6 +35,9 @@
  .admin-btn{padding:10px;background:#6a4bd9;border:none;color:#fff;border-radius:10px;width:100%;cursor:pointer;font-weight:bold;margin-top:10px}
  .delete-btn{background:#d95353}
 </style>
+<!-- Firebase -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 </head>
 <body>
 <h1>Rezzover TierList</h1>
@@ -68,16 +71,28 @@
 </div>
 
 <script>
+// 🔹 Firebase config (usa tu propia configuración de Firebase)
+const firebaseConfig = {
+  apiKey: "TU_API_KEY",
+  authDomain: "TU_PROJECT.firebaseapp.com",
+  projectId: "TU_PROJECT",
+  storageBucket: "TU_PROJECT.appspot.com",
+  messagingSenderId: "TU_SENDER_ID",
+  appId: "TU_APP_ID"
+};
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// Variables
 let categories=["overall","vanilla","sword","nethpot","uhc","axe","smp"];
 let modesList=["vanilla","sword","nethpot","uhc","axe","smp"];
 let tierPoints={HT1:10,LT1:9,HT2:8,LT2:7,HT3:6,LT3:5,HT4:4,LT4:3,HT5:2,LT5:1};
-let players=JSON.parse(localStorage.getItem("players"))||[];
+let players=[]; // se cargará desde Firebase
 let currentCategory="overall";
 let editingPlayer=null;
-let adminLoggedIn = false; // ← variable para proteger admin
+let adminLoggedIn = false;
 
-function save(){localStorage.setItem("players",JSON.stringify(players));}
-
+// 🔹 Render categories
 function renderCategories(){
  let html="";
  categories.forEach(c=>{
@@ -85,22 +100,20 @@ function renderCategories(){
  });
  document.getElementById("catBtns").innerHTML=html;
 }
-
 function setCategory(c){currentCategory=c;renderCategories();renderPlayers();}
 
+// 🔹 Player functions
 function calculateOverall(p){
  let sum=0;
  p.modes.forEach(m=>{sum+=tierPoints[m.level]});
  return sum;
 }
-
 function renderPlayers(){
  let list=[];
  if(currentCategory=="overall"){
    list=[...players].sort((a,b)=>calculateOverall(b)-calculateOverall(a));
  } else {
    list=players.filter(p=>p.modes.some(m=>m.category===currentCategory));
-   // ordenar por la categoría actual
    list.sort((a,b)=>{
        let aLvl = a.modes.find(m=>m.category===currentCategory)?.level;
        let bLvl = b.modes.find(m=>m.category===currentCategory)?.level;
@@ -121,7 +134,6 @@ function renderPlayers(){
  });
  document.getElementById("players").innerHTML=html;
 }
-
 function openModal(name){
  let p=players.find(x=>x.name===name);
  document.getElementById("modal").style.display="flex";
@@ -136,20 +148,16 @@ function openModal(name){
 }
 function closeModal(){document.getElementById("modal").style.display="none";}
 
-// Admin
-function openAdmin(){
- document.getElementById("admin-panel").style.display="block";
-}
-
+// 🔹 Admin
+function openAdmin(){document.getElementById("admin-panel").style.display="block";}
 function loginAdmin(){
  let pass=document.getElementById("admin-pass").value;
  if(pass!="taroleroxd32") return alert("Contraseña incorrecta");
- adminLoggedIn = true; // ← marca que el admin está logueado
+ adminLoggedIn = true;
  document.getElementById("admin-pass").style.display="none";
  renderModeSelectors();
  alert("Acceso concedido");
 }
-
 function renderModeSelectors(player=null){
  let html="";
  modesList.forEach(m=>{
@@ -171,14 +179,12 @@ function renderModeSelectors(player=null){
  });
  document.getElementById("modeSelects").innerHTML=html;
 }
-
 function toggleTier(m){
  let cb=document.getElementById("cb-"+m);
  let sl=document.getElementById("tier-"+m);
  if(!cb || !sl) return;
  sl.style.display=cb.checked?"block":"none";
 }
-
 function loadPlayerForEdit(){
  let name=document.getElementById("searchPlayer").value.trim();
  let p=players.find(x=>x.name.toLowerCase()==name.toLowerCase());
@@ -188,7 +194,8 @@ function loadPlayerForEdit(){
  renderModeSelectors(p);
 }
 
-function savePlayer(){
+// 🔹 Firebase CRUD
+async function savePlayer(){
  if(!adminLoggedIn) return alert("Debes iniciar sesión como admin para guardar jugadores");
 
  let name=document.getElementById("playerName").value.trim();
@@ -202,25 +209,40 @@ function savePlayer(){
  });
 
  if(editingPlayer){
-   editingPlayer.name=name;
-   editingPlayer.modes=newModes;
+   // actualizar en Firebase
+   const docRef = db.collection("players").doc(editingPlayer.id);
+   await docRef.set({name:name,modes:newModes});
  } else {
-   players.push({name:name,modes:newModes});
+   // agregar nuevo en Firebase
+   await db.collection("players").add({name:name,modes:newModes});
  }
-
  editingPlayer=null;
- save();renderPlayers();alert("Guardado");
+ alert("Guardado");
 }
 
-function deletePlayer(){
+// 🔹 Delete
+async function deletePlayer(){
  if(!adminLoggedIn) return alert("Debes iniciar sesión como admin para eliminar jugadores");
  if(!editingPlayer) return alert("Busca un jugador primero");
- players=players.filter(p=>p!==editingPlayer);
+
+ await db.collection("players").doc(editingPlayer.id).delete();
  editingPlayer=null;
- save();renderPlayers();alert("Eliminado");
+ alert("Eliminado");
 }
 
-renderCategories();renderPlayers();
+// 🔹 Cargar jugadores desde Firebase en tiempo real
+db.collection("players").onSnapshot(snapshot=>{
+ players=[];
+ snapshot.forEach(doc=>{
+   let data = doc.data();
+   data.id = doc.id; // guardar id para editar/borrar
+   players.push(data);
+ });
+ renderPlayers();
+});
+
+// Inicial
+renderCategories();
 </script>
 </body>
 </html>
